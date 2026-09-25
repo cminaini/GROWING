@@ -30,7 +30,7 @@ button{border:0;border-radius:10px;padding:8px 10px;font-weight:900;font-size:13
 .section{color:#b7ff32;font-weight:900;letter-spacing:1.1px;font-size:12px;margin-bottom:6px}
 .status{padding:5px 8px;border-radius:9px;background:#061b12;margin-top:5px;font-size:10px}
 .note{font-size:9px;color:#9eb7aa;line-height:1.25}
-.page{display:none}.page.active{display:block}
+.page{display:none}.page.active{display:block}.page:not(#main){max-height:calc(100vh - 55px);overflow:auto;padding-bottom:12px}
 #main{overflow:hidden}
 .back{background:transparent;color:#b7ff32;padding:3px 0;margin-bottom:7px}
 table{width:100%;border-collapse:collapse;font-size:10px}
@@ -121,7 +121,7 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
       <div class="value" id="m24pct">0.00%</div>
     </div>
     <div class="metric">
-      <div class="label">30 Days Proj</div>
+      <div class="label">30 Days proj</div>
       <div class="value" id="m30">0.00%</div>
     </div>
   </div>
@@ -137,7 +137,15 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
   </table>
 </div>
 
-<div class="warning">discipline n luck</div>
+<div class="card" style="margin-bottom:5px">
+  <div class="section">24H ACTIVITY</div>
+  <div class="grid">
+    <div class="metric"><div class="label">Profitable Wins</div><div class="value" id="wins24">0</div></div>
+    <div class="metric"><div class="label">Profit </div><div class="value" id="profit24">$0.00</div></div>
+  </div>
+</div>
+
+<div class="warning">discipline n luck.</div>
 </section>
 
 <section id="metrics" class="page">
@@ -186,7 +194,8 @@ let state = {
   currentBet: 1,
   profitableSequences: 0,
   lastProfit: 0,
-  history: []
+  history: [],
+  profitEvents: []
 };
 
 function money(n){
@@ -323,7 +332,8 @@ function setStartingStake(){
     currentBet:1,
     profitableSequences:0,
     lastProfit:0,
-    history:[]
+    history:[],
+    profitEvents:[]
   };
 
   renderLadder();
@@ -339,17 +349,16 @@ function recordWin(){
   const x = ladderFromBet1(state.currentBet1);
   const bet = state.currentBet;
   const oldExposure = state.exposure;
-
   const profit = bet <= 3 ? x.profit : 0;
+  const timestamp = Date.now();
 
   state.lastBet1 = state.currentBet1;
   state.lastProfit = profit;
 
   if(profit > 0){
-    state.exposure =
-      Math.round((oldExposure + profit) * 100) / 100;
-
+    state.exposure = Math.round((oldExposure + profit) * 100) / 100;
     state.profitableSequences++;
+    state.profitEvents.unshift({ timestamp: timestamp, profit: profit });
   }
 
   state.history.unshift({
@@ -358,7 +367,8 @@ function recordWin(){
     bet1:state.currentBet1,
     oldExposure:oldExposure,
     profit:profit,
-    newExposure:state.exposure
+    newExposure:state.exposure,
+    timestamp:timestamp
   });
 
   state.sequence++;
@@ -367,8 +377,7 @@ function recordWin(){
   const next = bet1ForExposure(state.exposure);
   state.currentBet1 = next.stakes[0];
 
-  document.getElementById("startInput").value =
-    state.currentBet1.toFixed(2);
+  document.getElementById("startInput").value = state.currentBet1.toFixed(2);
 
   renderLadder();
   renderHistory();
@@ -388,6 +397,7 @@ function recordLoss(){
   }
 
   const oldExposure = state.exposure;
+  const timestamp = Date.now();
 
   state.lastBet1 = state.currentBet1;
   state.lastProfit = -oldExposure;
@@ -398,7 +408,8 @@ function recordLoss(){
     bet1:state.currentBet1,
     oldExposure:oldExposure,
     profit:-oldExposure,
-    newExposure:0
+    newExposure:0,
+    timestamp:timestamp
   });
 
   state.exposure = 0;
@@ -410,77 +421,72 @@ function recordLoss(){
   renderHistory();
 }
 
+function getRolling24h(){
+  const now = Date.now();
+  const cutoff = now - 24*60*60*1000;
+  state.profitEvents = (state.profitEvents || []).filter(e => Number(e.timestamp) >= cutoff);
+  let total = 0;
+  state.profitEvents.forEach(e => total += Number(e.profit) || 0);
+  return { count: state.profitEvents.length, profit: Math.round(total*100)/100 };
+}
+
 function updateMetrics(){
-  const rate =
-    state.exposure > 0 ? state.lastProfit / state.exposure : 0;
+  const rolling = getRolling24h();
+  const rate = state.exposure > 0 ? rolling.profit / state.exposure : 0;
+  const compounded = Math.pow(1 + rate, 30) - 1;
 
-  const compounded =
-    Math.pow(1 + rate, 30) - 1;
-
-  document.getElementById("m24").textContent =
-    (state.lastProfit >= 0 ? "+" : "") + money(state.lastProfit);
-
+  document.getElementById("m24").textContent = "+" + money(rolling.profit);
   document.getElementById("m24pct").textContent = pct(rate);
   document.getElementById("m30").textContent = pct(compounded);
 
-  document.getElementById("mExposure").textContent =
-    money(state.exposure);
-
-  document.getElementById("mStake").textContent =
-    state.currentBet1 > 0
-      ? money(ladderFromBet1(state.currentBet1).stakes[state.currentBet-1])
-      : "$0.00";
-
-  document.getElementById("mm24").textContent =
-    (state.lastProfit >= 0 ? "+" : "") + money(state.lastProfit);
-
+  document.getElementById("mExposure").textContent = money(state.exposure);
+  document.getElementById("mStake").textContent = state.currentBet1 > 0
+    ? money(ladderFromBet1(state.currentBet1).stakes[state.currentBet-1])
+    : "$0.00";
+  document.getElementById("mm24").textContent = "+" + money(rolling.profit);
   document.getElementById("mm24pct").textContent = pct(rate);
   document.getElementById("mm30").textContent = pct(compounded);
-  document.getElementById("mWins").textContent =
-    state.profitableSequences;
+  document.getElementById("mWins").textContent = state.profitableSequences;
+
+  document.getElementById("wins24").textContent = rolling.count;
+  document.getElementById("profit24").textContent = "+" + money(rolling.profit);
 
   let rows = "";
-
   if(state.exposure > 0){
     [1,2,3,6,12,30].forEach(n=>{
-      const projected =
-        state.exposure * Math.pow(1 + rate,n);
-
-      rows += `
-        <tr>
-          <td>${n}</td>
-          <td>${money(projected)}</td>
-          <td>${pct(projected/state.exposure - 1)}</td>
-        </tr>`;
+      const projected = state.exposure * Math.pow(1 + rate,n);
+      rows += `<tr><td>${n}</td><td>${money(projected)}</td><td>${pct(projected/state.exposure-1)}</td></tr>`;
     });
   }
-
   document.getElementById("projection").innerHTML = rows;
 }
 
 function renderHistory(){
   const el = document.getElementById("historyList");
-
   if(!state.history.length){
-    el.textContent = "No completed sequences yet.";
+    el.innerHTML = "No completed sequences yet.";
     return;
   }
 
-  el.innerHTML = state.history.map(h=>`
-    <div class="historyItem">
-      <b>Sequence ${h.sequence}</b> —
-      ${h.winningBet === "ALL 5 LOSE"
-        ? "All 5 lost"
-        : "Bet " + h.winningBet + " won"}<br>
-      Initial Bet 1: <b>${money(h.bet1)}</b><br>
-      PE before: ${money(h.oldExposure)}<br>
-      Result:
-      <span class="${h.profit >= 0 ? "win" : ""}">
-        ${h.profit >= 0 ? "+" : ""}${money(h.profit)}
-      </span><br>
-      Next PE: <b>${money(h.newExposure)}</b>
-    </div>
-  `).join("");
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="min-width:520px">
+        <thead>
+          <tr><th>Seq</th><th>Result</th><th>Bet 1</th><th>PE Before</th><th>Profit</th><th>Next PE</th></tr>
+        </thead>
+        <tbody>
+          ${state.history.map(h=>`
+            <tr>
+              <td>${h.sequence}</td>
+              <td>${h.winningBet === "ALL 5 LOSE" ? "All Lose" : "Bet "+h.winningBet+" W"}</td>
+              <td>${money(h.bet1)}</td>
+              <td>${money(h.oldExposure)}</td>
+              <td class="${h.profit>=0?'win':''}">${h.profit>=0?'+':''}${money(h.profit)}</td>
+              <td>${money(h.newExposure)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function toggleMenu(){
@@ -517,6 +523,7 @@ function load(){
   }catch(e){}
 
   if(!state.currentBet) state.currentBet = 1;
+  if(!Array.isArray(state.profitEvents)) state.profitEvents = [];
 
   if(state.currentBet1 > 0){
     renderLadder();
@@ -540,7 +547,8 @@ function resetAll(){
     currentBet:1,
     profitableSequences:0,
     lastProfit:0,
-    history:[]
+    history:[],
+    profitEvents:[]
   };
 
   document.getElementById("startInput").value = "10";
