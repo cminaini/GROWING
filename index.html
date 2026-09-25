@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>1.60 Exposure</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{background:#06150f;color:#f4fff8;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif}
+.app{width:100%;max-width:520px;height:100vh;margin:auto;padding:8px 10px 7px;display:flex;flex-direction:column;overflow:hidden}
+.top{height:36px;flex:0 0 36px;display:flex;align-items:center;justify-content:space-between}
+.title{font-size:20px;font-weight:900;letter-spacing:1px;color:#b7ff32}
+.menuBtn{width:40px;height:34px;padding:0;background:#123a2a;color:#fff;border:1px solid #285844;border-radius:11px;font-size:21px}
+.menu{display:none;position:absolute;right:10px;top:49px;z-index:20;width:170px;background:#0d2b20;border:2px solid #285844;border-radius:15px;padding:5px;box-shadow:0 12px 28px #0009}
+.menu.open{display:block}
+.menu button{width:100%;text-align:left;background:transparent;color:#fff;margin:1px 0;padding:10px}
+.card{background:#0d2b20;border:1.5px solid #285844;border-radius:17px;padding:9px 11px;margin-bottom:6px;flex:0 0 auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.metric{background:#0a2118;border-radius:11px;padding:7px 9px;min-height:48px}
+.label{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.9px}
+.value{font-size:19px;font-weight:900;margin-top:2px;line-height:1.05}
+.next .value{color:#b7ff32}
+input{width:100%;height:36px;background:#06150f;color:#fff;border:1px solid #47715c;border-radius:9px;padding:6px 9px;font-size:18px;font-weight:800}
+button{border:0;border-radius:10px;padding:8px 10px;font-weight:900;font-size:13px;cursor:pointer}
+.primary{background:#b7ff32;color:#081408}
+.loss{background:#5b252d;color:#fff}
+.row{display:flex;gap:6px}.row>*{flex:1}
+.section{color:#b7ff32;font-weight:900;letter-spacing:1.1px;font-size:12px;margin-bottom:6px}
+.status{padding:5px 8px;border-radius:9px;background:#061b12;margin-top:5px;font-size:10px}
+.note{font-size:9px;color:#9eb7aa;line-height:1.25}
+.page{display:none}.page.active{display:block}
+#main{overflow:hidden}
+.back{background:transparent;color:#b7ff32;padding:3px 0;margin-bottom:7px}
+table{width:100%;border-collapse:collapse;font-size:10px}
+th,td{text-align:right;padding:4px 3px;border-bottom:1px solid #285844;line-height:1.05}
+th:first-child,td:first-child{text-align:left}
+th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
+.current{background:#16462f}.win{color:#b7ff32}
+.historyItem{padding:8px 0;border-bottom:1px solid #285844;line-height:1.4;font-size:11px}
+.warning{font-size:8px;color:#cdbf83;line-height:1.15;margin-top:2px}
+.startRow{display:grid;grid-template-columns:1fr 92px;gap:6px;align-items:end}
+.startBtn{height:36px}
+@media(max-height:720px){
+  .app{padding-top:5px;padding-bottom:4px}
+  .top{height:31px;flex-basis:31px}
+  .title{font-size:18px}
+  .card{padding:7px 9px;margin-bottom:4px}
+  .metric{min-height:43px;padding:6px 8px}
+  .value{font-size:17px}
+  .section{font-size:11px;margin-bottom:4px}
+  table{font-size:9px}
+  th,td{padding:3px 2px}
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<div class="top">
+  <div class="title">GROWING</div>
+  <button class="menuBtn" onclick="toggleMenu()">☰</button>
+</div>
+
+<div id="menu" class="menu">
+  <button onclick="openPage('metrics')">Metrics</button>
+  <button onclick="openPage('history')">History</button>
+  <button onclick="resetAll()">Reset</button>
+</div>
+
+<section id="main" class="page active">
+
+<div class="card">
+  <div class="section">STARTING STAKE</div>
+  <div class="startRow">
+    <input id="startInput" type="number" min="0.01" step="0.01" value="10" oninput="previewStart()">
+    <button class="primary startBtn" onclick="setStartingStake()">Calculate</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="grid">
+    <div class="metric">
+      <div class="label">Stake</div>
+      <div class="value" id="stake">$10.00</div>
+    </div>
+    <div class="metric">
+      <div class="label">PE</div>
+      <div class="value" id="exposure">$766.42</div>
+    </div>
+    <div class="metric next">
+      <div class="label">Next Bet</div>
+      <div class="value" id="nextBet">$26.67</div>
+    </div>
+    <div class="metric">
+      <div class="label">Last Bet </div>
+      <div class="value" id="lastBet1">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section">RESULT</div>
+  <div class="row">
+    <button class="primary" style="font-size:20px" onclick="recordWin()">W</button>
+    <button class="loss" style="font-size:20px" onclick="recordLoss()">L</button>
+  </div>
+  <div class="status" id="status">Current: Bet 1</div>
+</div>
+
+<div class="card">
+  <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="metric">
+      <div class="label">24h change</div>
+      <div class="value" id="m24">$0.00</div>
+    </div>
+    <div class="metric">
+      <div class="label">%C</div>
+      <div class="value" id="m24pct">0.00%</div>
+    </div>
+    <div class="metric">
+      <div class="label">30 Days Proj</div>
+      <div class="value" id="m30">0.00%</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section">FIVE-BET PLAN</div>
+  <table>
+    <thead>
+      <tr><th>Bet</th><th>Stake</th><th>Cumulative</th><th>Net</th></tr>
+    </thead>
+    <tbody id="ladder"></tbody>
+  </table>
+</div>
+
+<div class="warning">discipline n luck</div>
+</section>
+
+<section id="metrics" class="page">
+<button class="back" onclick="openPage('main')">← Back</button>
+
+<div class="card">
+  <div class="section">METRICS</div>
+  <div class="grid">
+    <div class="metric"><div class="label">Current PE</div><div class="value" id="mExposure">$0.00</div></div>
+    <div class="metric"><div class="label">Current Stake</div><div class="value" id="mStake">$0.00</div></div>
+    <div class="metric"><div class="label">24h Change</div><div class="value" id="mm24">$0.00</div></div>
+    <div class="metric"><div class="label">24h %</div><div class="value" id="mm24pct">0.00%</div></div>
+    <div class="metric"><div class="label">30 Day %</div><div class="value" id="mm30">0.00%</div></div>
+    <div class="metric"><div class="label">Profitable Sequences</div><div class="value" id="mWins">0</div></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section">PROJECTION</div>
+  <table>
+    <thead><tr><th>Sequences</th><th>Exposure</th><th>Change</th></tr></thead>
+    <tbody id="projection"></tbody>
+  </table>
+</div>
+</section>
+
+<section id="history" class="page">
+<button class="back" onclick="openPage('main')">← Back</button>
+<div class="card">
+  <div class="section">HISTORY</div>
+  <div id="historyList" class="note">No completed sequences yet.</div>
+</div>
+</section>
+
+</div>
+
+<script>
+const ODDS = 1.60;
+const RATE = 0.60;
+
+let state = {
+  exposure: 0,
+  currentBet1: 0,
+  lastBet1: null,
+  sequence: 1,
+  currentBet: 1,
+  profitableSequences: 0,
+  lastProfit: 0,
+  history: []
+};
+
+function money(n){
+  return "$" + Number(n || 0).toLocaleString(undefined,{
+    minimumFractionDigits:2,
+    maximumFractionDigits:2
+  });
+}
+
+function pct(n){
+  return (n * 100).toFixed(2) + "%";
+}
+
+function ladderFromBet1(s){
+  s = Number(s);
+  const b = [];
+
+  b[0] = s;
+  b[1] = b[0] * 1.6 / 0.6;
+  b[2] = b[1] * 1.6 / 0.6;
+  b[3] = (b[0] + b[1] + b[2]) / 0.6;
+  b[4] = (b[0] + b[1] + b[2] + b[3]) / 0.6;
+
+  for(let i=0;i<5;i++){
+    b[i] = Math.round(b[i] * 100) / 100;
+  }
+
+  let cumulative = 0;
+  const totals = [];
+  for(let i=0;i<5;i++){
+    cumulative += b[i];
+    totals.push(Math.round(cumulative * 100) / 100);
+  }
+
+  return {
+    stakes:b,
+    cumulative:totals,
+    exposure:totals[4],
+    profit:Math.round(b[0] * RATE * 100) / 100
+  };
+}
+
+function bet1ForExposure(target){
+  const unit = ladderFromBet1(1).exposure;
+  let estimate = target / unit;
+  let best = ladderFromBet1(estimate);
+
+  for(let cents=-5;cents<=5;cents++){
+    const candidate = Math.max(0.01, Math.round((estimate + cents/100) * 100) / 100);
+    const x = ladderFromBet1(candidate);
+
+    if(Math.abs(x.exposure-target) < Math.abs(best.exposure-target)){
+      best = x;
+    }
+  }
+
+  return best;
+}
+
+function renderLadder(){
+  if(!(state.currentBet1 > 0)){
+    document.getElementById("ladder").innerHTML = "";
+    return;
+  }
+
+  const x = ladderFromBet1(state.currentBet1);
+
+  state.exposure = x.exposure;
+
+  document.getElementById("stake").textContent =
+    money(x.stakes[state.currentBet-1]);
+
+  document.getElementById("exposure").textContent =
+    money(state.exposure);
+
+  document.getElementById("nextBet").textContent =
+    state.currentBet < 5 ? money(x.stakes[state.currentBet]) : "—";
+
+  document.getElementById("lastBet1").textContent =
+    state.lastBet1 == null ? "—" : money(state.lastBet1);
+
+  document.getElementById("status").textContent =
+    "Current: Bet " + state.currentBet;
+
+  let rows = "";
+
+  for(let i=0;i<5;i++){
+    const net = i < 3 ? x.profit : 0;
+
+    rows += `
+      <tr class="${i+1 === state.currentBet ? "current" : ""}">
+        <td>Bet ${i+1}</td>
+        <td>${money(x.stakes[i])}</td>
+        <td>${money(x.cumulative[i])}</td>
+        <td class="${net ? "win" : ""}">
+          ${net ? "+" : ""}${money(net)}
+        </td>
+      </tr>`;
+  }
+
+  document.getElementById("ladder").innerHTML = rows;
+
+  updateMetrics();
+  save();
+}
+
+function previewStart(){
+  const s = Number(document.getElementById("startInput").value) || 0;
+
+  if(!s) return;
+
+  const x = ladderFromBet1(s);
+
+  document.getElementById("stake").textContent = money(s);
+  document.getElementById("exposure").textContent = money(x.exposure);
+  document.getElementById("nextBet").textContent = money(x.stakes[1]);
+}
+
+function setStartingStake(){
+  const s = Number(document.getElementById("startInput").value);
+
+  if(!(s > 0)){
+    alert("Enter a starting stake greater than zero.");
+    return;
+  }
+
+  const x = ladderFromBet1(s);
+
+  state = {
+    exposure:x.exposure,
+    currentBet1:s,
+    lastBet1:null,
+    sequence:1,
+    currentBet:1,
+    profitableSequences:0,
+    lastProfit:0,
+    history:[]
+  };
+
+  renderLadder();
+  renderHistory();
+}
+
+function recordWin(){
+  if(!(state.currentBet1 > 0)){
+    alert("Set a starting stake first.");
+    return;
+  }
+
+  const x = ladderFromBet1(state.currentBet1);
+  const bet = state.currentBet;
+  const oldExposure = state.exposure;
+
+  const profit = bet <= 3 ? x.profit : 0;
+
+  state.lastBet1 = state.currentBet1;
+  state.lastProfit = profit;
+
+  if(profit > 0){
+    state.exposure =
+      Math.round((oldExposure + profit) * 100) / 100;
+
+    state.profitableSequences++;
+  }
+
+  state.history.unshift({
+    sequence:state.sequence,
+    winningBet:bet,
+    bet1:state.currentBet1,
+    oldExposure:oldExposure,
+    profit:profit,
+    newExposure:state.exposure
+  });
+
+  state.sequence++;
+  state.currentBet = 1;
+
+  const next = bet1ForExposure(state.exposure);
+  state.currentBet1 = next.stakes[0];
+
+  document.getElementById("startInput").value =
+    state.currentBet1.toFixed(2);
+
+  renderLadder();
+  renderHistory();
+}
+
+function recordLoss(){
+  if(!(state.currentBet1 > 0)){
+    alert("Set a starting stake first.");
+    return;
+  }
+
+  if(state.currentBet < 5){
+    state.currentBet++;
+    state.lastProfit = 0;
+    renderLadder();
+    return;
+  }
+
+  const oldExposure = state.exposure;
+
+  state.lastBet1 = state.currentBet1;
+  state.lastProfit = -oldExposure;
+
+  state.history.unshift({
+    sequence:state.sequence,
+    winningBet:"ALL 5 LOSE",
+    bet1:state.currentBet1,
+    oldExposure:oldExposure,
+    profit:-oldExposure,
+    newExposure:0
+  });
+
+  state.exposure = 0;
+  state.currentBet1 = 0;
+  state.currentBet = 1;
+  state.sequence++;
+
+  renderLadder();
+  renderHistory();
+}
+
+function updateMetrics(){
+  const rate =
+    state.exposure > 0 ? state.lastProfit / state.exposure : 0;
+
+  const compounded =
+    Math.pow(1 + rate, 30) - 1;
+
+  document.getElementById("m24").textContent =
+    (state.lastProfit >= 0 ? "+" : "") + money(state.lastProfit);
+
+  document.getElementById("m24pct").textContent = pct(rate);
+  document.getElementById("m30").textContent = pct(compounded);
+
+  document.getElementById("mExposure").textContent =
+    money(state.exposure);
+
+  document.getElementById("mStake").textContent =
+    state.currentBet1 > 0
+      ? money(ladderFromBet1(state.currentBet1).stakes[state.currentBet-1])
+      : "$0.00";
+
+  document.getElementById("mm24").textContent =
+    (state.lastProfit >= 0 ? "+" : "") + money(state.lastProfit);
+
+  document.getElementById("mm24pct").textContent = pct(rate);
+  document.getElementById("mm30").textContent = pct(compounded);
+  document.getElementById("mWins").textContent =
+    state.profitableSequences;
+
+  let rows = "";
+
+  if(state.exposure > 0){
+    [1,2,3,6,12,30].forEach(n=>{
+      const projected =
+        state.exposure * Math.pow(1 + rate,n);
+
+      rows += `
+        <tr>
+          <td>${n}</td>
+          <td>${money(projected)}</td>
+          <td>${pct(projected/state.exposure - 1)}</td>
+        </tr>`;
+    });
+  }
+
+  document.getElementById("projection").innerHTML = rows;
+}
+
+function renderHistory(){
+  const el = document.getElementById("historyList");
+
+  if(!state.history.length){
+    el.textContent = "No completed sequences yet.";
+    return;
+  }
+
+  el.innerHTML = state.history.map(h=>`
+    <div class="historyItem">
+      <b>Sequence ${h.sequence}</b> —
+      ${h.winningBet === "ALL 5 LOSE"
+        ? "All 5 lost"
+        : "Bet " + h.winningBet + " won"}<br>
+      Initial Bet 1: <b>${money(h.bet1)}</b><br>
+      PE before: ${money(h.oldExposure)}<br>
+      Result:
+      <span class="${h.profit >= 0 ? "win" : ""}">
+        ${h.profit >= 0 ? "+" : ""}${money(h.profit)}
+      </span><br>
+      Next PE: <b>${money(h.newExposure)}</b>
+    </div>
+  `).join("");
+}
+
+function toggleMenu(){
+  document.getElementById("menu").classList.toggle("open");
+}
+
+function openPage(id){
+  document.getElementById("menu").classList.remove("open");
+
+  document.querySelectorAll(".page").forEach(p=>{
+    p.classList.remove("active");
+  });
+
+  document.getElementById(id).classList.add("active");
+
+  window.scrollTo(0,0);
+}
+
+function save(){
+  localStorage.setItem(
+    "exposureGrowthSketch",
+    JSON.stringify(state)
+  );
+}
+
+function load(){
+  try{
+    const saved =
+      JSON.parse(localStorage.getItem("exposureGrowthSketch"));
+
+    if(saved){
+      state = Object.assign(state,saved);
+    }
+  }catch(e){}
+
+  if(!state.currentBet) state.currentBet = 1;
+
+  if(state.currentBet1 > 0){
+    renderLadder();
+  }else{
+    previewStart();
+  }
+
+  renderHistory();
+}
+
+function resetAll(){
+  if(!confirm("Reset the simulator and history?")) return;
+
+  localStorage.removeItem("exposureGrowthSketch");
+
+  state = {
+    exposure:0,
+    currentBet1:0,
+    lastBet1:null,
+    sequence:1,
+    currentBet:1,
+    profitableSequences:0,
+    lastProfit:0,
+    history:[]
+  };
+
+  document.getElementById("startInput").value = "10";
+
+  previewStart();
+  renderHistory();
+  updateMetrics();
+}
+
+load();
+</script>
+</body>
+</html>
