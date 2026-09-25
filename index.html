@@ -145,6 +145,20 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
   </div>
 </div>
 
+<div class="card" style="margin-bottom:5px">
+  <div class="section">LAST 100 BETS</div>
+  <div class="grid">
+    <div class="metric">
+      <div class="label">Win Rate</div>
+      <div class="value" id="winRate100">0.00%</div>
+    </div>
+    <div class="metric">
+      <div class="label">Loss Streak</div>
+      <div class="value" id="lossStreak100">0</div>
+    </div>
+  </div>
+</div>
+
 <div class="warning">discipline n luck.</div>
 </section>
 
@@ -195,7 +209,8 @@ let state = {
   profitableSequences: 0,
   lastProfit: 0,
   history: [],
-  profitEvents: []
+  profitEvents: [],
+  betResults: []
 };
 
 function money(n){
@@ -333,7 +348,8 @@ function setStartingStake(){
     profitableSequences:0,
     lastProfit:0,
     history:[],
-    profitEvents:[]
+    profitEvents:[],
+    betResults:[]
   };
 
   renderLadder();
@@ -351,6 +367,10 @@ function recordWin(){
   const oldExposure = state.exposure;
   const profit = bet <= 3 ? x.profit : 0;
   const timestamp = Date.now();
+
+  state.betResults = Array.isArray(state.betResults) ? state.betResults : [];
+  state.betResults.push("W");
+  if(state.betResults.length > 100) state.betResults = state.betResults.slice(-100);
 
   state.lastBet1 = state.currentBet1;
   state.lastProfit = profit;
@@ -388,6 +408,10 @@ function recordLoss(){
     alert("Set a starting stake first.");
     return;
   }
+
+  state.betResults = Array.isArray(state.betResults) ? state.betResults : [];
+  state.betResults.push("L");
+  if(state.betResults.length > 100) state.betResults = state.betResults.slice(-100);
 
   if(state.currentBet < 5){
     state.currentBet++;
@@ -430,6 +454,31 @@ function getRolling24h(){
   return { count: state.profitEvents.length, profit: Math.round(total*100)/100 };
 }
 
+function getLast100Stats(){
+  const results = Array.isArray(state.betResults) ? state.betResults.slice(-100) : [];
+  const total = results.length;
+  const wins = results.filter(r => r === "W").length;
+
+  let lossStreak = 0;
+  for(let i = results.length - 1; i >= 0; i--){
+    if(results[i] === "L") lossStreak++;
+    else break;
+  }
+
+  return {
+    total: total,
+    wins: wins,
+    winRate: total ? wins / total : 0,
+    lossStreak: lossStreak
+  };
+}
+
+function updateLast100Stats(){
+  const stats = getLast100Stats();
+  document.getElementById("winRate100").textContent = pct(stats.winRate);
+  document.getElementById("lossStreak100").textContent = stats.lossStreak;
+}
+
 function updateMetrics(){
   const rolling = getRolling24h();
   const rate = state.exposure > 0 ? rolling.profit / state.exposure : 0;
@@ -450,6 +499,8 @@ function updateMetrics(){
 
   document.getElementById("wins24").textContent = rolling.count;
   document.getElementById("profit24").textContent = "+" + money(rolling.profit);
+
+  updateLast100Stats();
 
   let rows = "";
   if(state.exposure > 0){
@@ -524,6 +575,7 @@ function load(){
 
   if(!state.currentBet) state.currentBet = 1;
   if(!Array.isArray(state.profitEvents)) state.profitEvents = [];
+  if(!Array.isArray(state.betResults)) state.betResults = [];
 
   if(state.currentBet1 > 0){
     renderLadder();
@@ -548,7 +600,8 @@ function resetAll(){
     profitableSequences:0,
     lastProfit:0,
     history:[],
-    profitEvents:[]
+    profitEvents:[],
+    betResults:[]
   };
 
   document.getElementById("startInput").value = "10";
