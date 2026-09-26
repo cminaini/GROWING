@@ -339,18 +339,32 @@ function setStartingStake(){
 
   const x = ladderFromBet1(s);
 
-  state = {
-    exposure:x.exposure,
-    currentBet1:s,
-    lastBet1:null,
-    sequence:1,
-    currentBet:1,
-    profitableSequences:0,
-    lastProfit:0,
-    history:[],
-    profitEvents:[],
-    betResults:[]
-  };
+  /*
+     Calculate starts a NEW sequence only.
+     Historical records, 24h timestamps, and the last-100-bet
+     results are deliberately preserved.
+  */
+  const hasHistory = Array.isArray(state.history) && state.history.length > 0;
+
+  state.exposure = x.exposure;
+  state.currentBet1 = s;
+  state.lastBet1 = null;
+  state.currentBet = 1;
+  state.lastProfit = 0;
+
+  // Only advance the sequence number when there is already a sequence
+  // recorded. On the very first calculation, remain on Sequence 1.
+  if(hasHistory){
+    state.sequence = Math.max(Number(state.sequence) || 1, state.history.length + 1);
+  }
+
+  // IMPORTANT: do not clear these arrays/counters here.
+  // They are the app's persistent history and statistics.
+  if(!Array.isArray(state.history)) state.history = [];
+  if(!Array.isArray(state.profitEvents)) state.profitEvents = [];
+  if(!Array.isArray(state.betResults)) state.betResults = [];
+
+  document.getElementById("startInput").value = s.toFixed(2);
 
   renderLadder();
   renderHistory();
@@ -448,28 +462,10 @@ function recordLoss(){
 function getRolling24h(){
   const now = Date.now();
   const cutoff = now - 24*60*60*1000;
-
-  const before = (state.profitEvents || []).length;
-
-  // Keep only wins whose timestamp is within the last 24 hours.
-  state.profitEvents = (state.profitEvents || []).filter(
-    e => Number(e.timestamp) >= cutoff
-  );
-
+  state.profitEvents = (state.profitEvents || []).filter(e => Number(e.timestamp) >= cutoff);
   let total = 0;
-  state.profitEvents.forEach(e => {
-    total += Number(e.profit) || 0;
-  });
-
-  // Persist removal of expired events.
-  if(state.profitEvents.length !== before){
-    save();
-  }
-
-  return {
-    count: state.profitEvents.length,
-    profit: Math.round(total*100)/100
-  };
+  state.profitEvents.forEach(e => total += Number(e.profit) || 0);
+  return { count: state.profitEvents.length, profit: Math.round(total*100)/100 };
 }
 
 function getLast100Stats(){
@@ -602,26 +598,7 @@ function load(){
   }
 
   renderHistory();
-
-  // Remove any profit events that are already older than 24 hours.
-  updateMetrics();
 }
-
-// Keep the 24-hour figure rolling automatically using the phone's clock.
-setInterval(() => {
-  updateMetrics();
-}, 60000);
-
-// Recalculate immediately when the iPhone brings the page back into view.
-document.addEventListener("visibilitychange", () => {
-  if(document.visibilityState === "visible"){
-    updateMetrics();
-  }
-});
-
-window.addEventListener("focus", () => {
-  updateMetrics();
-});
 
 function resetAll(){
   if(!confirm("Reset the simulator and history?")) return;
