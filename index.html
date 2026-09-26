@@ -448,10 +448,28 @@ function recordLoss(){
 function getRolling24h(){
   const now = Date.now();
   const cutoff = now - 24*60*60*1000;
-  state.profitEvents = (state.profitEvents || []).filter(e => Number(e.timestamp) >= cutoff);
+
+  const before = (state.profitEvents || []).length;
+
+  // Keep only wins whose timestamp is within the last 24 hours.
+  state.profitEvents = (state.profitEvents || []).filter(
+    e => Number(e.timestamp) >= cutoff
+  );
+
   let total = 0;
-  state.profitEvents.forEach(e => total += Number(e.profit) || 0);
-  return { count: state.profitEvents.length, profit: Math.round(total*100)/100 };
+  state.profitEvents.forEach(e => {
+    total += Number(e.profit) || 0;
+  });
+
+  // Persist removal of expired events.
+  if(state.profitEvents.length !== before){
+    save();
+  }
+
+  return {
+    count: state.profitEvents.length,
+    profit: Math.round(total*100)/100
+  };
 }
 
 function getLast100Stats(){
@@ -584,7 +602,26 @@ function load(){
   }
 
   renderHistory();
+
+  // Remove any profit events that are already older than 24 hours.
+  updateMetrics();
 }
+
+// Keep the 24-hour figure rolling automatically using the phone's clock.
+setInterval(() => {
+  updateMetrics();
+}, 60000);
+
+// Recalculate immediately when the iPhone brings the page back into view.
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible"){
+    updateMetrics();
+  }
+});
+
+window.addEventListener("focus", () => {
+  updateMetrics();
+});
 
 function resetAll(){
   if(!confirm("Reset the simulator and history?")) return;
