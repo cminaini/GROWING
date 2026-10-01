@@ -113,12 +113,12 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
 <div class="card">
   <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
     <div class="metric">
-      <div class="label">24h change</div>
-      <div class="value" id="m24">$0.00</div>
+      <div class="label">Today's change</div>
+      <div class="value" id="mToday">$0.00</div>
     </div>
     <div class="metric">
       <div class="label">%C</div>
-      <div class="value" id="m24pct">0.00%</div>
+      <div class="value" id="mTodayPct">0.00%</div>
     </div>
     <div class="metric">
       <div class="label">30 Days proj</div>
@@ -138,10 +138,10 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
 </div>
 
 <div class="card" style="margin-bottom:5px">
-  <div class="section">24H ACTIVITY</div>
+  <div class="section">TODAY'S ACTIVITY</div>
   <div class="grid">
-    <div class="metric"><div class="label">Profitable Wins</div><div class="value" id="wins24">0</div></div>
-    <div class="metric"><div class="label">Profit </div><div class="value" id="profit24">$0.00</div></div>
+    <div class="metric"><div class="label">Profitable Wins</div><div class="value" id="winsToday">0</div></div>
+    <div class="metric"><div class="label">Profit </div><div class="value" id="profitToday">$0.00</div></div>
   </div>
 </div>
 
@@ -170,8 +170,8 @@ th{font-size:8px;color:#9eb7aa;text-transform:uppercase;letter-spacing:.7px}
   <div class="grid">
     <div class="metric"><div class="label">Current PE</div><div class="value" id="mExposure">$0.00</div></div>
     <div class="metric"><div class="label">Current Stake</div><div class="value" id="mStake">$0.00</div></div>
-    <div class="metric"><div class="label">24h Change</div><div class="value" id="mm24">$0.00</div></div>
-    <div class="metric"><div class="label">24h %</div><div class="value" id="mm24pct">0.00%</div></div>
+    <div class="metric"><div class="label">Today's Change</div><div class="value" id="mmToday">$0.00</div></div>
+    <div class="metric"><div class="label">Today's %</div><div class="value" id="mmTodayPct">0.00%</div></div>
     <div class="metric"><div class="label">30 Day %</div><div class="value" id="mm30">0.00%</div></div>
     <div class="metric"><div class="label">Profitable Sequences</div><div class="value" id="mWins">0</div></div>
   </div>
@@ -459,13 +459,37 @@ function recordLoss(){
   renderHistory();
 }
 
-function getRolling24h(){
-  const now = Date.now();
-  const cutoff = now - 24*60*60*1000;
-  state.profitEvents = (state.profitEvents || []).filter(e => Number(e.timestamp) >= cutoff);
+function getTodaysWinnings(){
+  const now = new Date();
+
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0, 0, 0, 0
+  ).getTime();
+
+  const endOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0, 0, 0, 0
+  ).getTime();
+
+  const events = (state.profitEvents || []).filter(e => {
+    const t = Number(e.timestamp);
+    return t >= startOfToday && t < endOfToday;
+  });
+
   let total = 0;
-  state.profitEvents.forEach(e => total += Number(e.profit) || 0);
-  return { count: state.profitEvents.length, profit: Math.round(total*100)/100 };
+  events.forEach(e => {
+    total += Number(e.profit) || 0;
+  });
+
+  return {
+    count: events.length,
+    profit: Math.round(total * 100) / 100
+  };
 }
 
 function getLast100Stats(){
@@ -494,25 +518,25 @@ function updateLast100Stats(){
 }
 
 function updateMetrics(){
-  const rolling = getRolling24h();
+  const rolling = getTodaysWinnings();
   const rate = state.exposure > 0 ? rolling.profit / state.exposure : 0;
   const compounded = Math.pow(1 + rate, 30) - 1;
 
-  document.getElementById("m24").textContent = "+" + money(rolling.profit);
-  document.getElementById("m24pct").textContent = pct(rate);
+  document.getElementById("mToday").textContent = "+" + money(rolling.profit);
+  document.getElementById("mTodayPct").textContent = pct(rate);
   document.getElementById("m30").textContent = pct(compounded);
 
   document.getElementById("mExposure").textContent = money(state.exposure);
   document.getElementById("mStake").textContent = state.currentBet1 > 0
     ? money(ladderFromBet1(state.currentBet1).stakes[state.currentBet-1])
     : "$0.00";
-  document.getElementById("mm24").textContent = "+" + money(rolling.profit);
-  document.getElementById("mm24pct").textContent = pct(rate);
+  document.getElementById("mmToday").textContent = "+" + money(rolling.profit);
+  document.getElementById("mmTodayPct").textContent = pct(rate);
   document.getElementById("mm30").textContent = pct(compounded);
   document.getElementById("mWins").textContent = state.profitableSequences;
 
-  document.getElementById("wins24").textContent = rolling.count;
-  document.getElementById("profit24").textContent = "+" + money(rolling.profit);
+  document.getElementById("winsToday").textContent = rolling.count;
+  document.getElementById("profitToday").textContent = "+" + money(rolling.profit);
 
   updateLast100Stats();
 
@@ -599,6 +623,30 @@ function load(){
 
   renderHistory();
 }
+
+let lastCalendarDate = new Date().toDateString();
+
+setInterval(() => {
+  const currentDate = new Date().toDateString();
+  updateMetrics();
+
+  if(currentDate !== lastCalendarDate){
+    lastCalendarDate = currentDate;
+    updateMetrics();
+  }
+}, 60000);
+
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible"){
+    lastCalendarDate = new Date().toDateString();
+    updateMetrics();
+  }
+});
+
+window.addEventListener("focus", () => {
+  lastCalendarDate = new Date().toDateString();
+  updateMetrics();
+});
 
 function resetAll(){
   if(!confirm("Reset the simulator and history?")) return;
